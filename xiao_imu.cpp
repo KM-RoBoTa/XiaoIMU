@@ -18,6 +18,8 @@
 #include <termios.h>    // POSIX Terminal Control Definitions   
 #include <unistd.h>     // Sleep function
 #include <cstring>
+#include <sys/ioctl.h> 
+#include <linux/serial.h>
 
 #include "xiao_imu.hpp"
 #include "time.hpp"
@@ -90,7 +92,7 @@ int IMU::IMULoop(const char* imu_portname)
     // O_RDWR   - Read/Write access to serial port 
     // O_NOCTTY - No terminal will control the process 
     // Open in blocking mode, read will wait
-	fd = open(imu_portname, O_RDWR | O_NOCTTY);
+	fd = open(imu_portname, O_RDWR | O_NOCTTY | O_NONBLOCK | O_NDELAY);
 
 	if(fd < 0) {
 		printf("Error in opening the IMU's port!\n");
@@ -101,7 +103,8 @@ int IMU::IMULoop(const char* imu_portname)
 
 	// ----- Setting the attributes of the serial port using termios structure -----
 
-	struct termios SerialPortSettings;	// Create the structure                          
+	struct termios SerialPortSettings;	// Create the structure   
+	struct serial_struct ser_info;                       
 	tcgetattr(fd, &SerialPortSettings);	// Get the current attributes of the Serial port 
 
 	// Setting the Baud rate 
@@ -126,6 +129,11 @@ int IMU::IMULoop(const char* imu_portname)
 	SerialPortSettings.c_cc[VMIN] = 40;  // Read at least 10 characters 
 	SerialPortSettings.c_cc[VTIME] = 10; // Wait indefinetly   
 
+	// Enable linux FTDI low latency mode
+    ioctl(m_fd, TIOCGSERIAL, &ser_info);
+    ser_info.flags |= ASYNC_LOW_LATENCY;
+    ioctl(m_fd, TIOCSSERIAL, &ser_info);
+
     // Set the new attributes to the termios structure
 	if((tcsetattr(fd, TCSANOW, &SerialPortSettings)) != 0) {
 	    cout << "ERROR in setting serial port attributes!" << endl;
@@ -137,21 +145,29 @@ int IMU::IMULoop(const char* imu_portname)
 
 
 	// TIME TESTS
-	struct timespec loop_start, now;
+	struct timespec loop_start, now, prev, prev_valid;
 	double elapsed = 0;
+	double dur_reading, dur_buffering, dur_extracting, dur_interpret, dur_valid;
+
+	prev_valid = time_s();
 
 	// -----  Start of the main loop -----
 	cout << "Starting sensor reading" << endl;
     while(!m_stopThread) {
 
 		// TIME TEST
-		loop_start = time_s();
+		//loop_start = time_s();
 
 		//tcflush(fd, TCIFLUSH);   // Discards old data in the rx buffer 
 		bytes_read = read(fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
 
+		// TIME TESTS
+		//now = time_s();
+        //dur_reading = get_delta_us(now, loop_start);
+
 		// Print read values
-		/*cout << "Bytes read: " << bytes_read << endl;    
+		/*if (bytes_read != -1)
+			cout << "\nBytes read: " << bytes_read << endl;    
 		for (int i=0; i<bytes_read; i++) {
 			char c = tmp_buffer[i];
 
@@ -165,9 +181,12 @@ int IMU::IMULoop(const char* imu_portname)
 				cout << "carriage";
 			else 
 				cout << c;
-		}
-		cout << endl;*/
+		}*/
+		//cout << endl;
 		
+		// TIME TEST
+		//prev = time_s();
+
 		if (m_occupied_bytes == 0) {
 			if (strchr(tmp_buffer, ASCII_SOH) != NULL) {
 				memcpy(m_buffer, tmp_buffer, bytes_read);
@@ -179,13 +198,35 @@ int IMU::IMULoop(const char* imu_portname)
 			m_occupied_bytes += bytes_read;
 		}
 
+		//now = time_s();
+        //dur_buffering = get_delta_us(now, prev);
+		//prev = now;
+
 		//printBuffer(m_buffer);
 
+		//prev = time_s();
 		bool output = extractPacket();
+
+		if (output) {
+			now = time_s();
+        	dur_valid = get_delta_us(now, prev_valid);
+			cout << "Time between 2 readings: " << dur_valid << " uS" << endl;
+			prev_valid = now;
+		}
+
+
+		//now = time_s();
+        //dur_extracting = get_delta_us(now, prev);
+		//prev = now;		
+
+		//prev = time_s();
 
 		// Interpret
 		if (output)
 			interpretData();
+
+		
+
 		/*else {
 			scoped_lock lock(m_mutex);
 
@@ -196,17 +237,29 @@ int IMU::IMULoop(const char* imu_portname)
 			m_IMU.gyroY = 0; 
 			m_IMU.gyroZ = 0; 
 		}*/
+	
 
 		// TIME TESTS
 		//now = time_s();
         //elapsed = get_delta_us(now, loop_start);
-		//cout << "Elapsed time without sleep: " << elapsed << " uS" << endl;
+		//dur_interpret = get_delta_us(now, prev);
+
+		/*if (output) {
+			//cout << "\nDuration reading: " << dur_reading << " uS (" << dur_reading/elapsed*100 << "'%' of time)" << endl;
+			//cout << "Duration buffering: " << dur_buffering << " uS (" << dur_buffering/elapsed*100 << "'%' of time)" << endl;
+			//cout << "Duration extracting: " << dur_extracting << " uS (" << dur_extracting/elapsed*100 << "'%' of time)" << endl;
+			cout << "Duration interpreting: " << dur_interpret << " uS (" << dur_interpret/elapsed*100 << "'%' of time)" << endl;
+		}*/
+
+		//if (output)
+		//	cout << "Elapsed time without sleep: " << elapsed << " uS" << endl;
+
 
 		std::this_thread::sleep_for(chrono::microseconds(50));
 
-		now = time_s();
-        elapsed = get_delta_us(now, loop_start);
-		cout << "Elapsed time with sleep: " << elapsed << " uS" << endl;
+		//now = time_s();
+        //elapsed = get_delta_us(now, loop_start);
+		//cout << "Elapsed time with sleep: " << elapsed << " uS" << endl;
     }
 
     close(fd); // Close the serial port 
