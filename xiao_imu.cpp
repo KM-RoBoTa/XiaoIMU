@@ -32,6 +32,9 @@
 
 using namespace std;
 
+// About low latency: https://stackoverflow.com/questions/13126138/low-latency-serial-communication-on-linux
+// https://forum.pjrc.com/index.php?threads/reducing-latency-in-serial-communication.72162/
+
 /**
  * @brief       Create and initialize a IMU object
  * @note        By default, open ttyACM0. If you're using a different
@@ -87,58 +90,9 @@ IMU::~IMU()
  */
 int IMU::IMULoop(const char* imu_portname)
 {
-    int fd; // File descriptor
 
-    // O_RDWR   - Read/Write access to serial port 
-    // O_NOCTTY - No terminal will control the process 
-    // Open in blocking mode, read will wait
-	fd = open(imu_portname, O_RDWR | O_NOCTTY | O_NONBLOCK | O_NDELAY);
+	openPort(imu_portname);
 
-	if(fd < 0) {
-		printf("Error in opening the IMU's port!\n");
-		exit(0);
-	}
-	printf("IMU port open successfully!\n");
-
-
-	// ----- Setting the attributes of the serial port using termios structure -----
-
-	struct termios SerialPortSettings;	// Create the structure   
-	struct serial_struct ser_info;                       
-	tcgetattr(fd, &SerialPortSettings);	// Get the current attributes of the Serial port 
-
-	// Setting the Baud rate 
-	cfsetispeed(&SerialPortSettings, 230400 ); // Set Read  Speed as 230400                       
-	cfsetospeed(&SerialPortSettings, 230400 ); // Set Write Speed as 230400                       
-
-	/* 8N1 Mode */
-	SerialPortSettings.c_cflag &= ~PARENB;   // Disables the Parity Enable bit(PARENB),So No Parity   
-	SerialPortSettings.c_cflag &= ~CSTOPB;   // CSTOPB = 2 Stop bits,here it is cleared so 1 Stop bit 
-	SerialPortSettings.c_cflag &= ~CSIZE;	 // Clears the mask for setting the data size             
-	SerialPortSettings.c_cflag |=  CS8;      // Set the data bits = 8                                 
-
-	SerialPortSettings.c_cflag &= ~CRTSCTS;       // No Hardware flow Control                  
-	SerialPortSettings.c_cflag |= CREAD | CLOCAL; // Enable receiver,Ignore Modem Control lines
-
-	SerialPortSettings.c_iflag &= ~(IXON | IXOFF | IXANY);          // Disable XON/XOFF flow control both i/p and o/p
-	SerialPortSettings.c_iflag &= ~(ICANON | ECHO | ECHOE | ISIG);  // Non Cannonical mode                           
-
-	SerialPortSettings.c_oflag &= ~OPOST;   // No Output Processing
-
-	// Setting Time outs
-	SerialPortSettings.c_cc[VMIN] = 40;  // Read at least 10 characters 
-	SerialPortSettings.c_cc[VTIME] = 10; // Wait indefinetly   
-
-	// Enable linux FTDI low latency mode
-    ioctl(m_fd, TIOCGSERIAL, &ser_info);
-    ser_info.flags |= ASYNC_LOW_LATENCY;
-    ioctl(m_fd, TIOCSSERIAL, &ser_info);
-
-    // Set the new attributes to the termios structure
-	if((tcsetattr(fd, TCSANOW, &SerialPortSettings)) != 0) {
-	    cout << "ERROR in setting serial port attributes!" << endl;
-        sleep(1);
-    }
 
     char tmp_buffer[BUFFER_SIZE];   // Buffer to store the data received              
 	int  bytes_read = 0;     // Number of bytes read by the read() system call 
@@ -155,11 +109,13 @@ int IMU::IMULoop(const char* imu_portname)
 	cout << "Starting sensor reading" << endl;
     while(!m_stopThread) {
 
+
+
 		// TIME TEST
 		//loop_start = time_s();
 
 		//tcflush(fd, TCIFLUSH);   // Discards old data in the rx buffer 
-		bytes_read = read(fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
+		bytes_read = read(m_fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
 
 		// TIME TESTS
 		//now = time_s();
@@ -262,9 +218,64 @@ int IMU::IMULoop(const char* imu_portname)
 		//cout << "Elapsed time with sleep: " << elapsed << " uS" << endl;
     }
 
-    close(fd); // Close the serial port 
+    close(m_fd); // Close the serial port 
     cout << "Force sensors' serial port closed successfully! " << endl; 
     return 0;
+}
+
+bool IMU::openPort(const char* imu_portname)
+{
+
+    // O_RDWR   - Read/Write access to serial port 
+    // O_NOCTTY - No terminal will control the process 
+    // Open in blocking mode, read will wait
+	m_fd = open(imu_portname, O_RDWR | O_NOCTTY | O_NONBLOCK | O_NDELAY);
+
+	if(m_fd < 0) {
+		printf("Error in opening the IMU's port!\n");
+		exit(0);
+	}
+	printf("IMU port open successfully!\n");
+
+
+	// ----- Setting the attributes of the serial port using termios structure -----
+
+	struct termios SerialPortSettings;	// Create the structure   
+	struct serial_struct ser_info;                       
+	tcgetattr(m_fd, &SerialPortSettings);	// Get the current attributes of the Serial port 
+
+	// Setting the Baud rate 
+	cfsetispeed(&SerialPortSettings, 230400 ); // Set Read  Speed as 230400                       
+	cfsetospeed(&SerialPortSettings, 230400 ); // Set Write Speed as 230400                       
+
+	/* 8N1 Mode */
+	SerialPortSettings.c_cflag &= ~PARENB;   // Disables the Parity Enable bit(PARENB),So No Parity   
+	SerialPortSettings.c_cflag &= ~CSTOPB;   // CSTOPB = 2 Stop bits,here it is cleared so 1 Stop bit 
+	SerialPortSettings.c_cflag &= ~CSIZE;	 // Clears the mask for setting the data size             
+	SerialPortSettings.c_cflag |=  CS8;      // Set the data bits = 8                                 
+
+	SerialPortSettings.c_cflag &= ~CRTSCTS;       // No Hardware flow Control                  
+	SerialPortSettings.c_cflag |= CREAD | CLOCAL; // Enable receiver,Ignore Modem Control lines
+
+	SerialPortSettings.c_iflag &= ~(IXON | IXOFF | IXANY);          // Disable XON/XOFF flow control both i/p and o/p
+	SerialPortSettings.c_iflag &= ~(ICANON | ECHO | ECHOE | ISIG);  // Non Cannonical mode                           
+
+	SerialPortSettings.c_oflag &= ~OPOST;   // No Output Processing
+
+	// Setting Time outs
+	SerialPortSettings.c_cc[VMIN] = 40;  // Read at least 10 characters 
+	SerialPortSettings.c_cc[VTIME] = 10; // Wait indefinetly   
+
+	// Enable linux FTDI low latency mode
+    ioctl(m_fd, TIOCGSERIAL, &ser_info);
+    ser_info.flags |= ASYNC_LOW_LATENCY;
+    ioctl(m_fd, TIOCSSERIAL, &ser_info);
+
+    // Set the new attributes to the termios structure
+	if((tcsetattr(m_fd, TCSANOW, &SerialPortSettings)) != 0) {
+	    cout << "ERROR in setting serial port attributes!" << endl;
+        sleep(1);
+    }
 }
 
 void IMU::interpretData()

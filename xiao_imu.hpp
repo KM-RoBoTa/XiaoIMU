@@ -49,6 +49,7 @@ private:
     void clearBuffer(char* buffer);
     void printBuffer(char* buffer);
     bool extractPacket();
+    bool openPort(const char* imu_portname);
 
 public:
     IMU();
