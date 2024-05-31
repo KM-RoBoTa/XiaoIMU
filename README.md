@@ -43,6 +43,7 @@ make imu
 To run the code: ```./imu``` from the build folder.
 
 ## About
+KM-RoBoTa sarl's code for Seeed Studio XIAO nRF52840 Sense's IMU.
 
 ### Authors
 - Katarina Lichardova: katarina.lichardova@km-robota.com
