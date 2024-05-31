@@ -14,7 +14,7 @@ Some useful links:
 - IMU usage: https://wiki.seeedstudio.com/XIAO-BLE-Sense-IMU-Usage/
 
 ## C++ code to read the data
-To use the code, you simply need to add the 2 files in your project, and include the ```xiao_imu``` header. 
+To use the code, you simply need to add the 2 files in your project, and include the ```xiao_imu.hpp``` header. 
 
 You need to create an instance of the ```IMU``` class, which automatically opens the port, creates a thread and starts continuously reading the incoming data. <br /> 
 That data can be fetched by the main thread using the ```IMU::getValues()``` method. 
@@ -30,7 +30,7 @@ Unfortunately, it appears we do not have an FTDI converter (the Xiao board gets 
 Additional personal note: As I am not an expert in serial communication, I would be *very* happy to be proven wrong if there is a way to make it faster than the current crawl :snail:
 
 ## Example
-The example is very basic to showcase the use of the code: the main thread fetches the IMU values from the IMU's thread every 10ms. 
+The example is very basic to showcase the use of the code: the main thread fetches and prints the IMU values from the IMU's thread every 10ms. 
 
 To use the example, first plug in the IMU and check the assigned port. If the port is different than "/dev/ttyACM0", edit the main.cpp. <br /> 
 To build the example: 
