@@ -1,10 +1,5 @@
 #include "xiao_imu.hpp"
 #include <unistd.h>     // Sleep function
-#include <sstream> 
-#include <fstream> 
-
-
-std::ofstream file_force_sensors;
 
 using namespace std;
 
@@ -12,7 +7,7 @@ int main()
 {
     IMU imu("/dev/ttyACM0");
     IMUStruct imu_vals;
-    //file_force_sensors.open ("force_sensors.csv");
+
     sleep(1);
 
     while(1) {

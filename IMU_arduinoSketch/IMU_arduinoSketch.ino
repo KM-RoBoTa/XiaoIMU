@@ -6,9 +6,8 @@
  * @copyright
  * Copyright 2021-2023 Laura Paez Coy and Kamilo Melo                    \n
  * This code is under MIT licence: https://opensource.org/licenses/MIT
- * @authors  kamilo.melo@km-robota.com, 10/2023
- * @authors  katarina.lichardova@km-robota.com, 10/2023
- * @authors  melike.cezayirlioglu@km-robota.com, 10/2023
+ * @authors  katarina.lichardova@km-robota.com, 05/2024
+ * @authors  kamilo.melo@km-robota.com, 05/2024
  ****************************************************************************
  */
 
@@ -20,8 +19,8 @@
 // Gyro: angular velocity
 
 
-float accX, accY, accZ;
-float gyroX, gyroY, gyroZ;
+float accX, accY, accZ;     // Accelerations in [m/s²]
+float gyroX, gyroY, gyroZ;  // Angular velocities in [deg/s]
 
 // DEBUG
 int ctr = 1;
