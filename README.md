@@ -41,3 +41,12 @@ cmake ../
 make imu
 ```
 To run the code: ```./imu``` from the build folder.
+
+## About
+
+### Authors
+- Katarina Lichardova: katarina.lichardova@km-robota.com
+
+### Copyright
+Copyright 2021-2024, Laura Paez Coy and Kamilo Melo. <br /> 
+This code is under MIT licence: https://opensource.org/licenses/MIT
