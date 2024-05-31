@@ -22,24 +22,37 @@
 
 #define BUFFER_SIZE 255
 
+/**
+ * @brief   Structure for IMU data
+ */
 struct IMUStruct {
-    float accX;
-    float accY;
-    float accZ;
-    float gyroX;
-    float gyroY;
-    float gyroZ;
+    float accX;     // [m/s^2]
+    float accY;     // [m/s^2]
+    float accZ;     // [m/s^2]
+    float gyroX;    // [deg/s]
+    float gyroY;    // [deg/s]
+    float gyroZ;    // [deg/s]
 };
 
 
+/**
+ * @brief   Class handling a Seeed Studio's XIAO nRF52840 Sense IMU
+ * @details IMU reading runs in its own separate thread, handled by this class
+ */
 class IMU {
+public:
+    IMU();
+    IMU(const char* sensors_portname);
+    ~IMU();
+    
+    void getValues(IMUStruct& imu);
+
 private:
     int m_fd; // File descriptor
     bool m_stopThread;
     IMUStruct m_IMU;
     char m_buffer[BUFFER_SIZE];
     char m_packet[BUFFER_SIZE];
-    int m_test[BUFFER_SIZE];
     int m_occupied_bytes = 0;
 
     std::thread m_thread;
@@ -49,19 +62,7 @@ private:
     void clearBuffer(char* buffer);
     void printBuffer(char* buffer);
     bool extractPacket();
-    bool openPort(const char* imu_portname);
-
-public:
-    IMU();
-    IMU(const char* sensors_portname);
-    ~IMU();
-    
-    void getIMU(IMUStruct& imu);
+    void openPort(const char* imu_portname);
 };
-
-
-
-
-
 
 #endif
