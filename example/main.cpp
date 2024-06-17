@@ -7,6 +7,7 @@ int main()
 {
     IMU imu("/dev/ttyACM0");
     IMUStruct imu_vals;
+    imu.calibrateSensor();
 
     sleep(1);
 

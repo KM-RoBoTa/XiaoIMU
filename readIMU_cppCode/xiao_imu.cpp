@@ -1,7 +1,7 @@
 /**
  ****************************************************************************
- * @file        force_sensors.cpp
- * @brief       Handle force sensors reading in a thread
+ * @file        xiao_imu.cpp
+ * @brief       Handle IMU reading in a thread
  ****************************************************************************
  * @copyright
  * Copyright 2021-2023 Laura Paez Coy and Kamilo Melo                    \n
@@ -21,6 +21,8 @@
 #include <linux/serial.h>
 
 #include "xiao_imu.hpp"
+
+#define TARE_SAMPLES 		100 // Number of samples taken for the tare
 
 #define ASCII_NULL			0  	// NULL
 #define ASCII_SOH			1	// Start of header
@@ -44,10 +46,12 @@ IMU::IMU()
 
 	clearBuffer(m_buffer);
 	clearBuffer(m_packet);
+	nullifyStruct(m_tareOffsets);
 
     m_thread = thread(&IMU::IMULoop, this, "/dev/ttyACM0");
 
     cout << "Creating the IMU thread..." << endl;
+	usleep(50000);  
 }
 
 
@@ -61,23 +65,30 @@ IMU::IMU(const char* imu_portname)
 
 	clearBuffer(m_buffer);
 	clearBuffer(m_packet);
+	nullifyStruct(m_tareOffsets);
 
     m_thread = thread(&IMU::IMULoop, this, imu_portname);
 
     cout << "Creating the IMU thread..." << endl;
+	usleep(50000); 
 }
 
 /**
- * @brief       Class destructor. Takes care of safely stopping the thread
+ * @brief	Class destructor. Takes care of safely stopping the thread
  */
 IMU::~IMU()
 {
-    m_stopThread = true;
-
-    cout << "Safely stopping the force sensors' thread.... " << endl;
-
+	// Change the internal boolean to get the IMU thread out of its loop function
+	{
+		scoped_lock lock(m_mutex);
+		m_stopThread = true;	
+	}	
+    
+	// Block the main thread until the IMU thread finishes
     if (m_thread.joinable()) 
         m_thread.join();
+
+	cout << "IMU thread safely stopped" << endl;
 }
 
 /**
@@ -89,12 +100,13 @@ int IMU::IMULoop(const char* imu_portname)
 {
 	char tmp_buffer[BUFFER_SIZE];   // Buffer to store the data received              
 	int  bytes_read = 0;     		// Number of bytes read by the read() system call 
+	bool stopThread = 0;
 
 	openPort(imu_portname);
 
 	// -----  Start of the main loop -----
 	cout << "Starting sensor reading" << endl;
-    while(!m_stopThread) {
+    while(!stopThread) {
 
 		//tcflush(fd, TCIFLUSH);   // Discards old data in the rx buffer 
 		bytes_read = read(m_fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
@@ -139,10 +151,15 @@ int IMU::IMULoop(const char* imu_portname)
 
 		// Thread sleep for scheduling
 		std::this_thread::sleep_for(chrono::microseconds(50));
+
+		{
+			scoped_lock lock(m_mutex);
+			stopThread = m_stopThread;	
+		}	
     }
 
     close(m_fd); // Close the serial port 
-    cout << "Force sensors' serial port closed successfully! " << endl; 
+    cout << "IMU's serial port closed successfully! " << endl; 
     return 0;
 }
 
@@ -156,7 +173,7 @@ void IMU::openPort(const char* imu_portname)
     // O_RDWR   - Read/Write access to serial port 
     // O_NOCTTY - No terminal will control the process 
     // Open in blocking mode, read will wait
-	m_fd = open(imu_portname, O_RDWR | O_NOCTTY | O_NONBLOCK | O_NDELAY);
+	m_fd = open(imu_portname, O_RDWR | O_NOCTTY);
 
 	if(m_fd < 0) {
 		printf("Error in opening the IMU's port!\n");
@@ -317,15 +334,71 @@ void IMU::interpretData()
 }
 
 /**
- * @brief		Get the IMU values from a different thread
+ * @brief		Get the IMU values from a different thread, taking the calibration into account
  * @note		Interface function for main
  * @param[out]	imu Structure holding the output values
  */
 void IMU::getValues(IMUStruct& imu)
 {
-	scoped_lock lock(m_mutex);
+	// Grab raw values
+	{
+		scoped_lock lock(m_mutex);
+		imu = m_IMU;	
+	}
 
-	imu = m_IMU;	
+	// Apply the calibration
+	imu.accX -= m_tareOffsets.accX;
+	imu.accY -= m_tareOffsets.accY;
+	imu.accZ -= m_tareOffsets.accZ;
+	imu.gyroX -= m_tareOffsets.gyroX;
+	imu.gyroY -= m_tareOffsets.gyroY;
+	imu.gyroZ -= m_tareOffsets.gyroZ;
+}
+
+/**
+ * @brief	Calibrate the sensor
+ * @note	Make sure the IMU is not moving during it
+ */
+void IMU::calibrateSensor()
+{
+	cout << "IMU tare in progress..." << endl;
+
+	IMUStruct imu;
+
+	for (int i=0; i<TARE_SAMPLES; i++) {
+		{
+			scoped_lock lock(m_mutex);
+			imu = m_IMU;
+		}
+
+		// Update values
+		m_tareOffsets.accX += imu.accX; 
+		m_tareOffsets.accY += imu.accY; 
+		m_tareOffsets.accZ += imu.accZ; 
+		m_tareOffsets.gyroX += imu.gyroX;
+		m_tareOffsets.gyroY += imu.gyroY;
+		m_tareOffsets.gyroZ += imu.gyroZ;
+
+		usleep(10000);
+	}
+
+	m_tareOffsets.accX = m_tareOffsets.accX/(float)TARE_SAMPLES;
+	m_tareOffsets.accY = m_tareOffsets.accY/(float)TARE_SAMPLES;
+	m_tareOffsets.accZ = m_tareOffsets.accZ/(float)TARE_SAMPLES;
+	m_tareOffsets.gyroX = m_tareOffsets.gyroX/(float)TARE_SAMPLES;
+	m_tareOffsets.gyroY = m_tareOffsets.gyroY/(float)TARE_SAMPLES;
+	m_tareOffsets.gyroZ = m_tareOffsets.gyroZ/(float)TARE_SAMPLES; 
+
+	cout << "\nTare offsets: " << endl;
+	cout << "Acc X: " << m_tareOffsets.accX << endl;
+	cout << "Acc Y: " << m_tareOffsets.accY << endl;
+	cout << "Acc Z: " << m_tareOffsets.accZ << endl;
+	cout << "Gyro X: " << m_tareOffsets.gyroX << endl;
+	cout << "Gyro Y: " << m_tareOffsets.gyroY << endl;
+	cout << "Gyro Z: " << m_tareOffsets.gyroZ << endl;
+	cout << endl;
+
+	cout << "IMU calibrated!" << endl;
 }
 
 /**
@@ -336,6 +409,21 @@ void IMU::getValues(IMUStruct& imu)
 void IMU::clearBuffer(char* buffer)
 {
 	memset(buffer, ASCII_NULL, BUFFER_SIZE);
+}
+
+
+/**
+ * @brief		Set all values of the input structure to 0
+ * @param[in]	imu IMU structure to be cleared
+ */
+void IMU::nullifyStruct(IMUStruct& imu)
+{
+	imu.accX = 0;
+	imu.accY = 0;
+	imu.accZ = 0;
+	imu.gyroX = 0;
+	imu.gyroY = 0;
+	imu.gyroZ = 0;
 }
 
 /**

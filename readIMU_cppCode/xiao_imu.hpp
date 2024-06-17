@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
- * @file            force_sensors.hpp
- * @brief           Header for the force_sensors.cpp file.
+ * @file            xiao_imu.hpp
+ * @brief           Header for the xiao_imu.cpp file.
  ******************************************************************************
  * @copyright
  * Copyright 2021-2023 Laura Paez Coy and Kamilo Melo                    \n
@@ -45,11 +45,13 @@ public:
     ~IMU();
     
     void getValues(IMUStruct& imu);
+    void calibrateSensor();
 
 private:
     int m_fd; // File descriptor
     bool m_stopThread;
     IMUStruct m_IMU;
+    IMUStruct m_tareOffsets;
     char m_buffer[BUFFER_SIZE];
     char m_packet[BUFFER_SIZE];
     int m_occupied_bytes = 0;
@@ -62,6 +64,7 @@ private:
     void printBuffer(char* buffer);
     bool extractPacket();
     void openPort(const char* imu_portname);
+    void nullifyStruct(IMUStruct& imu);
 };
 
 #endif
