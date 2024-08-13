@@ -5,6 +5,11 @@ You can find here:
 - the C++ code for the Linux OS that reads the data sent by the Xiao board, found in the ```readIMU_cppCode```
 - an example of how to use the code, found in the ```example``` folder
 
+## Axes
+Axes in the IMU are set as follows:
+
+![Axes in the IMU](IMU_axes.png)
+
 ## Xiao board's Arduino sketch
 The used board is the Seeed XIAO BLE Sense - nRF52840, found in the ```Seeed nRF52840 mbed-enabled boards``` board package, which can be found here: https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
@@ -19,7 +24,7 @@ To use the code, you simply need to add the 2 files in your project, and include
 You need to create an instance of the ```IMU``` class, which automatically opens the port, creates a thread and starts continuously reading the incoming data. <br /> 
 That data can be fetched by the main thread using the ```IMU::getValues()``` method. 
 
-The acceleration values are in [m/s²], while the angular velocities in [deg/s]. You can find the drawing of the IMU's axes in the top folder of this repository.
+The acceleration values are in [m/s²], while the angular velocities in [deg/s].
 
 **Speed notes** <br /> 
 The code is very quick, however the data sending is very slow (a packet received every 7ms). <br /> 
