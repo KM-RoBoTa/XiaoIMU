@@ -1,6 +1,11 @@
 #include "xiao_imu.hpp"
 #include <unistd.h>     // Sleep function
 
+#define MAX_TIME    5       // 5sec
+#define USLEEP_TIME 10000   // us
+#define MAX_CTR     MAX_TIME*1000000/USLEEP_TIME
+
+
 using namespace std;
 
 int main()
@@ -11,7 +16,8 @@ int main()
 
     sleep(1);
 
-    while(1) {
+    int ctr = 0;
+    while(ctr < MAX_CTR) {
         imu.getValues(imu_vals);
 
         // Print read values
@@ -24,6 +30,8 @@ int main()
         cout << "\tX: " << imu_vals.gyroX << endl;
         cout << "\tY: " << imu_vals.gyroY << endl;
         cout << "\tZ: " << imu_vals.gyroZ << endl;
+
+        ctr++;
 
         usleep(10000);
     }
