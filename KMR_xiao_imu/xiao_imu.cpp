@@ -30,6 +30,8 @@
 #define ASCII_CR			13	// Carriage return
 #define ASCII_EXCLAMATION 	33	// Exclamation point
 
+#define BAUDRATE 			230400 
+
 using namespace std;
 
 // About low latency: https://stackoverflow.com/questions/13126138/low-latency-serial-communication-on-linux
@@ -45,8 +47,6 @@ namespace KMR::XIAO
  */
 IMU::IMU()
 {
-    m_stopThread = false;
-
 	clearBuffer(m_buffer);
 	clearBuffer(m_packet);
 	nullifyStruct(m_tareOffsets);
@@ -64,8 +64,6 @@ IMU::IMU()
  */
 IMU::IMU(const char* imu_portname)
 {
-    m_stopThread = false;
-
 	clearBuffer(m_buffer);
 	clearBuffer(m_packet);
 	nullifyStruct(m_tareOffsets);
@@ -91,7 +89,7 @@ IMU::~IMU()
     if (m_thread.joinable()) 
         m_thread.join();
 
-	cout << "IMU thread safely stopped" << endl;
+	cout << endl << "IMU thread safely stopped" << endl;
 }
 
 /**
@@ -105,18 +103,20 @@ int IMU::IMULoop(const char* imu_portname)
 	int  bytes_read = 0;     		// Number of bytes read by the read() system call 
 	bool stopThread = 0;
 
-	openPort(imu_portname);
+	int fd = openPort(imu_portname);
+
+  	sleep(2); // Required to make flush work, for some reason
+  	tcflush(fd,TCIOFLUSH); // Discards old data in the rx buffer 
 
 	// -----  Start of the main loop -----
 	cout << "Starting sensor reading" << endl;
     while(!stopThread) {
 
-		//tcflush(fd, TCIFLUSH);   // Discards old data in the rx buffer 
-		bytes_read = read(m_fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
+		bytes_read = read(fd, &tmp_buffer, BUFFER_SIZE);   // Read the data
 
 		// Print read values
 		/*if (bytes_read != -1) {
-			cout << "\nBytes read: " << bytes_read << endl;    
+			cout << "\nBytes read: " << bytes_read << endl;
 			for (int i=0; i<bytes_read; i++) {
 				char c = tmp_buffer[i];
 
@@ -128,7 +128,7 @@ int IMU::IMULoop(const char* imu_portname)
 					cout << "heading";
 				else if (c == ASCII_CR) // carriage return
 					cout << "carriage";
-				else 
+				else
 					cout << c;
 			}
 			cout << endl;
@@ -161,8 +161,10 @@ int IMU::IMULoop(const char* imu_portname)
 		}	
     }
 
-    close(m_fd); // Close the serial port 
-    cout << "IMU's serial port closed successfully! " << endl; 
+	//sleep(1);
+ 	tcflush(fd,TCIOFLUSH);
+    close(fd); // Close the serial port 
+
     return 0;
 }
 
@@ -171,14 +173,14 @@ int IMU::IMULoop(const char* imu_portname)
  * @brief       Open the IMU's port
  * @param[in]   imu_portname Port handling the IMU
  */
-void IMU::openPort(const char* imu_portname)
+int IMU::openPort(const char* imu_portname)
 {
     // O_RDWR   - Read/Write access to serial port 
     // O_NOCTTY - No terminal will control the process 
-    // Open in blocking mode, read will wait
-	m_fd = open(imu_portname, O_RDWR | O_NOCTTY);
+    // Open in blocking mode. Timeouts defined by VMIN and VTIME below
+	int fd = open(imu_portname, O_RDWR | O_NOCTTY);
 
-	if(m_fd < 0) {
+	if(fd < 0) {
 		printf("Error in opening the IMU's port!\n");
 		exit(0);
 	}
@@ -187,42 +189,38 @@ void IMU::openPort(const char* imu_portname)
 
 	// ----- Setting the attributes of the serial port using termios structure -----
 
-	struct termios SerialPortSettings;	// Create the structure   
-	struct serial_struct ser_info;                       
-	tcgetattr(m_fd, &SerialPortSettings);	// Get the current attributes of the Serial port 
+	struct termios SerialPortSettings;	// Create the structure                        
+	tcgetattr(fd, &SerialPortSettings);	// Get the current attributes of the Serial port 
 
 	// Setting the Baud rate 
-	cfsetispeed(&SerialPortSettings, 230400 ); // Set Read  Speed as 230400                       
-	cfsetospeed(&SerialPortSettings, 230400 ); // Set Write Speed as 230400                       
+	cfsetispeed(&SerialPortSettings, BAUDRATE); // Set read speed                       
+	cfsetospeed(&SerialPortSettings, BAUDRATE); // Set write speed                       
 
 	/* 8N1 Mode */
-	SerialPortSettings.c_cflag &= ~PARENB;   // Disables the Parity Enable bit(PARENB),So No Parity   
-	SerialPortSettings.c_cflag &= ~CSTOPB;   // CSTOPB = 2 Stop bits,here it is cleared so 1 Stop bit 
+	SerialPortSettings.c_cflag &= ~PARENB;   // Disables the Parity Enable bit(PARENB), so no parity   
+	SerialPortSettings.c_cflag &= ~CSTOPB;   // CSTOPB = 2 Stop bits, here it is cleared so 1 stop bit 
 	SerialPortSettings.c_cflag &= ~CSIZE;	 // Clears the mask for setting the data size             
 	SerialPortSettings.c_cflag |=  CS8;      // Set the data bits = 8                                 
 
-	SerialPortSettings.c_cflag &= ~CRTSCTS;       // No Hardware flow Control                  
-	SerialPortSettings.c_cflag |= CREAD | CLOCAL; // Enable receiver,Ignore Modem Control lines
+	SerialPortSettings.c_cflag &= ~CRTSCTS;       // No hardware flow control                  
+	SerialPortSettings.c_cflag |= CREAD | CLOCAL; // Enable receiver, ignore modem control lines
 
 	SerialPortSettings.c_iflag &= ~(IXON | IXOFF | IXANY);          // Disable XON/XOFF flow control both i/p and o/p
-	SerialPortSettings.c_iflag &= ~(ICANON | ECHO | ECHOE | ISIG);  // Non Cannonical mode                           
+	SerialPortSettings.c_iflag &= ~(ICANON | ECHO | ECHOE | ISIG);  // Non canonical mode                           
 
 	SerialPortSettings.c_oflag &= ~OPOST;   // No Output Processing
 
-	// Setting Time outs
-	SerialPortSettings.c_cc[VMIN] = 40;  // Read at least 10 characters 
-	SerialPortSettings.c_cc[VTIME] = 10; // Wait indefinetly   
-
-	// Enable linux FTDI low latency mode (useless here, because it's not an FTDI)
-    ioctl(m_fd, TIOCGSERIAL, &ser_info);
-    ser_info.flags |= ASYNC_LOW_LATENCY;
-    ioctl(m_fd, TIOCSSERIAL, &ser_info);
+	// Setting timeouts
+	SerialPortSettings.c_cc[VMIN] = 0;
+	SerialPortSettings.c_cc[VTIME] = 10; // Blocking read with 1 sec timeout
 
     // Set the new attributes to the termios structure
-	if((tcsetattr(m_fd, TCSANOW, &SerialPortSettings)) != 0) {
+	if((tcsetattr(fd, TCSANOW, &SerialPortSettings)) != 0) {
 	    cout << "ERROR in setting serial port attributes!" << endl;
         sleep(1);
     }
+
+	return fd;
 }
 
 
@@ -364,7 +362,7 @@ void IMU::getValues(IMUStruct& imu)
  */
 void IMU::calibrateSensor()
 {
-	cout << "IMU tare in progress..." << endl;
+	cout << endl << "IMU tare in progress..." << endl;
 
 	IMUStruct imu;
 
@@ -392,16 +390,16 @@ void IMU::calibrateSensor()
 	m_tareOffsets.gyroY = m_tareOffsets.gyroY/(float)TARE_SAMPLES;
 	m_tareOffsets.gyroZ = m_tareOffsets.gyroZ/(float)TARE_SAMPLES; 
 
-	cout << "\nTare offsets: " << endl;
+	/*cout << "\nTare offsets: " << endl;
 	cout << "Acc X: " << m_tareOffsets.accX << endl;
 	cout << "Acc Y: " << m_tareOffsets.accY << endl;
 	cout << "Acc Z: " << m_tareOffsets.accZ << endl;
 	cout << "Gyro X: " << m_tareOffsets.gyroX << endl;
 	cout << "Gyro Y: " << m_tareOffsets.gyroY << endl;
 	cout << "Gyro Z: " << m_tareOffsets.gyroZ << endl;
-	cout << endl;
+	cout << endl;*/
 
-	cout << "IMU calibrated!" << endl;
+	cout << "IMU calibrated!" << endl << endl;
 }
 
 /**

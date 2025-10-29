@@ -50,8 +50,7 @@ public:
     void calibrateSensor();
 
 private:
-    int m_fd; // File descriptor
-    bool m_stopThread;
+    bool m_stopThread = 0;
     IMUStruct m_IMU;
     IMUStruct m_tareOffsets;
     char m_buffer[BUFFER_SIZE];
@@ -65,7 +64,7 @@ private:
     void clearBuffer(char* buffer);
     void printBuffer(char* buffer);
     bool extractPacket();
-    void openPort(const char* imu_portname);
+    int openPort(const char* imu_portname);
     void nullifyStruct(IMUStruct& imu);
 };
 
