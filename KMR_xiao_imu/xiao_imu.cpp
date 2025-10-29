@@ -35,6 +35,9 @@ using namespace std;
 // About low latency: https://stackoverflow.com/questions/13126138/low-latency-serial-communication-on-linux
 // https://forum.pjrc.com/index.php?threads/reducing-latency-in-serial-communication.72162/
 
+namespace KMR::XIAO
+{
+
 /**
  * @brief       Create and initialize a IMU object
  * @note        By default, open ttyACM0. If you're using a different
@@ -453,3 +456,4 @@ void IMU::printBuffer(char* buffer)
 	
 }
 
+}

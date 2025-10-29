@@ -11,8 +11,7 @@
  ******************************************************************************
  */
 
-#ifndef XIAO_IMU_HPP
-#define XIAO_IMU_HPP
+#pragma once
 
 #include <iostream>
 #include <mutex>
@@ -20,6 +19,9 @@
 #include <vector>
 
 #define BUFFER_SIZE 255
+
+namespace KMR::XIAO
+{
 
 /**
  * @brief   Structure for IMU data
@@ -67,4 +69,4 @@ private:
     void nullifyStruct(IMUStruct& imu);
 };
 
-#endif
+}

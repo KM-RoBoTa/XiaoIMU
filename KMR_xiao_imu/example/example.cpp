@@ -1,4 +1,4 @@
-#include "xiao_imu.hpp"
+#include "../KMR_xiao_imu.hpp"
 #include <unistd.h>     // Sleep function
 
 #define MAX_TIME    5       // 5sec
@@ -10,8 +10,8 @@ using namespace std;
 
 int main()
 {
-    IMU imu("/dev/ttyACM0");
-    IMUStruct imu_vals;
+    KMR::XIAO::IMU imu("/dev/ttyACM0");
+    KMR::XIAO::IMUStruct imu_vals;
     imu.calibrateSensor();
 
     sleep(1);
